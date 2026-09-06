@@ -53,7 +53,7 @@ The job is a matrix, one entry per board:
 
 - `ota: true` adds a hard check that `build/Ghost_ESP_IDF.bin` fits `ota_slot_size`; `board_key` links the target to its entry in `firmware-manifest.json` for OTA.
 - The same matrix is **duplicated** in `build.py:get_build_targets()`. Adding a board means editing both, plus `configs/` and the README board table.
-- The workflow patches ESP-IDF in place before building (gdbstub compatibility, `ESP_WIFI_CACHE_TX_BUFFER_NUM`); it also appends `# CONFIG_FATFS_USE_DYN_BUFFERS is not set` / `# CONFIG_ESP_GDBSTUB_ENABLED is not set` to both sdkconfigs.
+- The workflow patches ESP-IDF **in place** before building (gdbstub compatibility, `ESP_WIFI_CACHE_TX_BUFFER_NUM`); it also appends `# CONFIG_FATFS_USE_DYN_BUFFERS is not set` / `# CONFIG_ESP_GDBSTUB_ENABLED is not set` to both sdkconfigs. A stock v6.1 checkout does **not** build without the gdbstub patch (`command_name_matches`, `portNUM_PROCESSORS`, `StaticTask_t` errors in `components/esp_gdbstub`), so run the workflow's patch step before building locally.
 - Packaging reads the app offset out of the produced partition table rather than assuming `0x10000` — OTA layouts put the first app slot at `0x20000` or higher.
 
 ## Adding or changing a board target
