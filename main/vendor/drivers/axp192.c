@@ -126,11 +126,22 @@ esp_err_t axp192_init(void) {
     return err;
   }
 
-  s_initialized = true;
-  ESP_LOGI(TAG, "AXP192 initialized (LDO2 3.3V panel/TF rail, panel out of reset)");
+  /* Leave the backlight rail OFF. This runs before lvgl_driver_init(), so the
+   * panel is powered and out of reset but has no controller init and no frame
+   * yet -- lighting it here shows garbage at full brightness. display_manager
+   * keeps the panel dark on purpose (display_manager.c, "Keep the panel dark
+   * until the first real view has been drawn") and main.c turns the backlight
+   * on via set_backlight_brightness() once the startup view's first refresh
+   * completes, which also applies the user's maximum-brightness setting.
+   * Disable explicitly rather than just skipping: the rail may still be on
+   * from a previous boot. */
+  esp_err_t bl_err = axp192_update_reg(AXP192_REG_DCDC_LDO_EN, AXP192_EN_DCDC3, 0x00);
+  if (bl_err != ESP_OK) {
+    ESP_LOGW(TAG, "Could not park the backlight rail off: %s", esp_err_to_name(bl_err));
+  }
 
-  /* Backlight last, so the panel is already powered when it lights up. */
-  axp192_set_backlight(100);
+  s_initialized = true;
+  ESP_LOGI(TAG, "AXP192 initialized (LDO2 3.3V panel/TF rail, panel out of reset, backlight off)");
   return ESP_OK;
 }
 
