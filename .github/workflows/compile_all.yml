@@ -34,6 +34,11 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      # One broken board must not hide the other 61. With the default
+      # fail-fast, the first failure cancels every other job in the matrix,
+      # so a single pre-existing breakage reports as "everything is red" and
+      # no target ever gets a verdict.
+      fail-fast: false
       matrix:
         target:
           - { name: "esp32-generic",          idf_target: "esp32",   sdkconfig_file: "configs/sdkconfig.default.esp32",                   zip_name: "esp32-generic.zip" }
