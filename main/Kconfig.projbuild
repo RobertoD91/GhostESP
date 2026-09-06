@@ -760,6 +760,27 @@ menu "Ghost ESP Options"
                 S3TWatch, it has no SD card slot, so the build carves out a
                 flash 'storage' partition mounted as virtual storage at /mnt.
 
+        config IS_M5CORE2_AWS
+            bool "Enable M5Stack Core2 for AWS Configuration"
+            default n
+            help
+                Enable configuration for the M5Stack Core2 for AWS IoT EduKit
+                (ESP32-D0WDQ6-V3, 16MB flash, 8MB PSRAM). The panel, the touch
+                controller and the TF card slot are all powered by an AXP192
+                PMU, so this also pulls in the AXP192 driver and runs its
+                power-on sequence before the display driver probes the panel.
+
+        config HAS_AXP192
+            bool "Enable AXP192 PMU support"
+            default y if IS_M5CORE2_AWS
+            default n
+            help
+                Enable the AXP192 power management IC driver. On M5Stack Core2
+                class boards the AXP192 owns the LCD logic rail, the LCD reset
+                line, the backlight rail and the TF card power, so the display
+                stays dark without it. Shares the internal I2C bus with the
+                touch controller.
+
         config HAS_DRV2605_HAPTICS
             bool "Enable DRV2605 Haptics"
             default y if IS_S3TWATCH
