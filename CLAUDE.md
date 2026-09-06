@@ -21,6 +21,11 @@ python build.py --menuconfig --idf-path ~/esp-idf
 ```
 
 ```bash
+# Docker, no local toolchain (see tools/docker/README.md)
+tools/docker/build.sh m5core2_aws esp32     # <config suffix> <chip>
+```
+
+```bash
 # Raw ESP-IDF, mirroring what CI does
 . ~/esp-idf/export.sh
 rm -f sdkconfig sdkconfig.defaults
