@@ -324,6 +324,20 @@ static volatile bool s_lvgl_gate_closed = false;
 static volatile bool s_lvgl_gate_parked = false;
 static volatile bool s_input_gate_closed = false;
 static volatile bool s_input_gate_parked = false;
+
+/* Sleep for at least one tick.
+ *
+ * The gate/quiesce loops below spin at task priority 14-15 while the IDLE task
+ * sits at priority 0. On a board configured with CONFIG_FREERTOS_HZ=100 (every
+ * ESP32-classic profile here) pdMS_TO_TICKS() of anything under 10ms truncates
+ * to 0, and vTaskDelay(0) is just taskYIELD(): it hands off only to tasks of
+ * equal or higher priority, so IDLE never runs. A gate that stays closed for
+ * more than CONFIG_ESP_TASK_WDT_TIMEOUT_S then trips the task watchdog on IDLE
+ * and reboots the board, turning a slow SD mount into a boot loop. Clamping to
+ * one tick keeps these loops actually blocking; on HZ=1000 boards the value is
+ * unchanged. */
+#define DM_DELAY_AT_LEAST_ONE_TICK(ms)                                         \
+  vTaskDelay(pdMS_TO_TICKS(ms) > 0 ? pdMS_TO_TICKS(ms) : 1)
 /* Serializes every cross-task entry into LVGL's internal timer list/heap
  * (lv_timer_handler() and lv_async_call()); see the creation site for why
  * this must be recursive. */
@@ -3492,7 +3506,7 @@ void display_manager_suspend_lvgl_task(void) {
       ESP_LOGW(TAG, "lvgl quiesce timed out; forcing suspend");
       break;
     }
-    vTaskDelay(pdMS_TO_TICKS(2));
+    DM_DELAY_AT_LEAST_ONE_TICK(2);
   }
   vTaskSuspend(lvgl_task_handle);
 }
@@ -3519,7 +3533,7 @@ void display_manager_suspend_input_task(void) {
       ESP_LOGW(TAG, "input quiesce timed out; forcing suspend");
       break;
     }
-    vTaskDelay(pdMS_TO_TICKS(2));
+    DM_DELAY_AT_LEAST_ONE_TICK(2);
   }
   vTaskSuspend(input_task_handle);
 }
@@ -3886,7 +3900,7 @@ void hardware_input_task(void *pvParameters) {
     if (s_input_gate_closed) {
       s_input_gate_parked = true;
       while (s_input_gate_closed) {
-        vTaskDelay(pdMS_TO_TICKS(5));
+        DM_DELAY_AT_LEAST_ONE_TICK(5);
       }
       s_input_gate_parked = false;
     }
@@ -5434,7 +5448,7 @@ void lvgl_tick_task(void *arg) {
       if (s_lvgl_gate_closed) {
           s_lvgl_gate_parked = true;
           while (s_lvgl_gate_closed) {
-              vTaskDelay(pdMS_TO_TICKS(5));
+              DM_DELAY_AT_LEAST_ONE_TICK(5);
           }
           s_lvgl_gate_parked = false;
       }
