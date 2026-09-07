@@ -1005,6 +1005,11 @@ void rainbow_task(void *pvParameter) {
   }
 
   ESP_LOGI(TAG, "Rainbow task exiting gracefully");
+  /* Clear the handle before self-deleting, as police/strobe/knightrider do.
+   * Without this the caller that signalled the exit keeps seeing a non-NULL
+   * handle, waits out its full timeout and then calls vTaskDelete() on a TCB
+   * this task already freed. */
+  rgb_effect_task_handle = NULL;
   vTaskDelete(NULL);
 }
 
