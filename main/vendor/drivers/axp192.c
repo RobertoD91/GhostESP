@@ -21,7 +21,7 @@ static const char *TAG = "AXP192";
 /* AXP192 register map (datasheet v1.1) -- only what the Core2 needs. */
 #define AXP192_REG_POWER_STATUS   0x00 /* bit5 = VBUS present */
 #define AXP192_REG_CHARGE_STATUS  0x01 /* bit6 = charging, bit5 = battery present */
-#define AXP192_REG_DCDC_LDO_EN    0x12 /* bit3 LDO3, bit2 LDO2, bit1 DCDC3, bit0 DCDC1 */
+#define AXP192_REG_DCDC_LDO_EN    0x12 /* bit6 EXTEN, bit3 LDO3, bit2 LDO2, bit1 DCDC3, bit0 DCDC1 */
 #define AXP192_REG_DCDC1_VOLT     0x26
 #define AXP192_REG_DCDC3_VOLT     0x27 /* LCD backlight rail */
 #define AXP192_REG_LDO23_VOLT     0x28 /* high nibble LDO2, low nibble LDO3 */
@@ -34,6 +34,7 @@ static const char *TAG = "AXP192";
 #define AXP192_REG_GPIO34_OUT     0x96
 #define AXP192_REG_BAT_VOLT_H     0x78 /* 12-bit, 1.1 mV/LSB */
 
+#define AXP192_EN_EXTEN           (1 << 6)
 #define AXP192_EN_LDO3            (1 << 3)
 #define AXP192_EN_LDO2            (1 << 2)
 #define AXP192_EN_DCDC3           (1 << 1)
@@ -104,8 +105,19 @@ esp_err_t axp192_init(void) {
   /* LDO2 = 3.3V (LCD logic + TF card), LDO3 = 1.8V (vibration motor, left off).
    * Both nibbles step 100 mV from 1.8V, so 0xF0 == LDO2 3.3V / LDO3 1.8V. */
   if (err == ESP_OK) err = axp192_write_reg(AXP192_REG_LDO23_VOLT, 0xF0);
+  /* EXTEN gates the 5V boost that feeds the M-Bus, and with it the M5GO
+   * bottom base -- including its 10 SK6812 LEDs on G25, which accept data and
+   * report success while staying dark when the base has no power.
+   *
+   * This is a hypothesis, not a checked fact: M5GFX's Core2 table only ORs in
+   * LDO2 (`0x12, 0x04, 0xFF`) and never touches EXTEN, but M5GFX is a display
+   * library and has no reason to power the base. Enabling the boost on a board
+   * built around one is harmless either way, so it is worth the experiment --
+   * if the LEDs stay dark with this set, the cause is elsewhere (the LED model
+   * is hardcoded to WS2812 while these are SK6812). */
   if (err == ESP_OK) {
-    err = axp192_update_reg(AXP192_REG_DCDC_LDO_EN, AXP192_EN_LDO3, AXP192_EN_LDO2);
+    err = axp192_update_reg(AXP192_REG_DCDC_LDO_EN, AXP192_EN_LDO3,
+                            AXP192_EN_LDO2 | AXP192_EN_EXTEN);
   }
 
   /* Pulse the panel reset now that its logic rail is up. */
