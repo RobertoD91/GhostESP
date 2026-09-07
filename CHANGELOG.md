@@ -12,7 +12,7 @@ Untagged entries are by ([@jaylikesbunda](https://github.com/jaylikesbunda)). A 
 - Added support for setting IR TX/RX pins at runtime through the CLI or display UI settings menu
 - Added `dualwd` BLE + WiFi coexistence wardriving (exclusive to PSRAM devices), available from the CLI and GPS menu
 - Added Elecrow CrowPanel 1.28-inch rotary display support with USB Audio volume/mute control
-- Added M5Stack Core2 for AWS board target, with a new AXP192 PMU driver for its LCD/TF power rails, LCD reset line and backlight, FT6336U touch, BM8563 RTC and the 10-LED SK6812 bar (PSRAM left disabled for now; display, touch, SD and the setup wizard verified on hardware, the LED bar and RTC not yet)
+- Added M5Stack Core2 for AWS board target, with a new AXP192 PMU driver for its LCD/TF power rails, LCD reset line and backlight, FT6336U touch, BM8563 RTC and the 10-LED SK6812 bar. Its 8MB of PSRAM is enabled, which needs the peer comm UART moved off G17/G16 (the ESP32-D0WD PSRAM clock and chip select) to G19/G27, and a minimum silicon revision of 3 so the PSRAM cache workaround stops claiming 14KB of IRAM — this build will not boot on an older ESP32 revision. Display, touch, SD, PSRAM and the setup wizard are verified on hardware; the LED bar and RTC are not yet
 - Fixed a view that switches to itself being silently dropped by the GUI router, which left the screen frozen on the old content. Affected every view that rebuilds itself after changing its own state, most visibly the setup wizard, where selecting a region lit the row up but never advanced a step
 - Fixed ESP32-C5 merged firmware failing to boot when flashed at `0x0` by placing the bootloader at the required `0x2000` offset - @yanxke (#395)
 
