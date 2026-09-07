@@ -3881,18 +3881,6 @@ void hardware_input_task(void *pvParameters) {
   };
   bool touch_active = false;
   bool skip_next_release = false;
-#ifdef CONFIG_IS_M5CORE2_AWS
-  /* The Core2's touch panel is 320x280 while its LCD is 320x240, so the strip
-   * below the screen is the three capacitive pads. They report as ordinary
-   * touches at y >= 240, where no view has any object, and were therefore
-   * inert. Claim them here and turn them into the board-level button events
-   * the rest of the firmware already understands. Captured on press, acted on
-   * release, and only when both land on the same pad -- so sliding off a pad
-   * cancels it, the way a button should. */
-#define M5CORE2_PAD_STRIP_TOP CONFIG_TFT_HEIGHT
-#define M5CORE2_PAD_AT(x) ((int)(((x) * 3) / LV_HOR_RES) > 2 ? 2 : (int)(((x) * 3) / LV_HOR_RES))
-  int capacitive_pad = -1;
-#endif
 #if GUI_LARGE_TOUCH_UI
   bool system_edge_touch = false;
 #endif
@@ -4842,13 +4830,6 @@ void hardware_input_task(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(20));
 #endif
       }
-#ifdef CONFIG_IS_M5CORE2_AWS
-      if (!skip_event && touch_data.point.y >= M5CORE2_PAD_STRIP_TOP) {
-        capacitive_pad = M5CORE2_PAD_AT(touch_data.point.x);
-        touch_active = true;
-        skip_event = true;
-      }
-#endif
       if (!skip_event) {
         touch_active = true;
         InputEvent event;
@@ -4886,40 +4867,6 @@ void hardware_input_task(void *pvParameters) {
     } else if (touch_data.state == LV_INDEV_STATE_REL && touch_active) {
       last_touch_time = xTaskGetTickCount();
       touch_active = false;
-#ifdef CONFIG_IS_M5CORE2_AWS
-      if (capacitive_pad >= 0) {
-        int released_on = (touch_data.point.y >= M5CORE2_PAD_STRIP_TOP)
-                              ? M5CORE2_PAD_AT(touch_data.point.x)
-                              : -1;
-        InputEvent pad = {0};
-        bool fire = true;
-        switch (released_on == capacitive_pad ? capacitive_pad : -1) {
-        case 0: /* left pad: Back */
-          pad.type = INPUT_TYPE_EXIT_BUTTON;
-          pad.data.exit_pressed = true;
-          break;
-        case 1: /* middle pad: Home */
-          pad.type = INPUT_TYPE_HOME_BUTTON;
-          pad.data.home_pressed = true;
-          break;
-        case 2: /* right pad: Confirm -- index 1 is select, see
-                 * handle_hardware_button_press() in main_menu_screen.c.
-                 * Press only, like the P4 back gesture: views act on the
-                 * press and a release for a pad nobody held is meaningless. */
-          pad.type = INPUT_TYPE_JOYSTICK;
-          pad.data.joystick_index = 1;
-          pad.data.joystick_pressed = true;
-          break;
-        default: /* released off the pad it started on: cancelled */
-          fire = false;
-          break;
-        }
-        capacitive_pad = -1;
-        if (fire && xQueueSend(input_queue, &pad, pdMS_TO_TICKS(10)) != pdTRUE) {
-          ESP_LOGE(TAG, "Failed to send capacitive button event to queue");
-        }
-      } else {
-#endif
 #if GUI_LARGE_TOUCH_UI
       if (s_p4_control_center_gesture) {
         bool opened = (last_touch_y - s_p4_control_center_start.y) >= 80 &&
@@ -4946,9 +4893,6 @@ void hardware_input_task(void *pvParameters) {
           ESP_LOGE(TAG, "Failed to send touch input to queue\n");
         }
       }
-#ifdef CONFIG_IS_M5CORE2_AWS
-      }
-#endif
     }
 
     } // enable_touch_polling
@@ -5127,13 +5071,8 @@ static bool dm_update_manual_touch_pressed_state(InputEvent *ev) {
     return consumed;
 }
 
-/* Boards that can raise a board-level HOME action: the CrowPanel's physical
- * key, and the Core2's middle capacitive pad. The body is board agnostic; the
- * guard exists because this consumes the event before the active view sees it,
- * and views that handle INPUT_TYPE_HOME_BUTTON themselves must keep getting it
- * on boards that do not want the escape-to-root behaviour. */
-#if defined(CONFIG_CROWPANEL_EPAPER_42) || defined(CONFIG_IS_M5CORE2_AWS)
-static bool dm_handle_home_button_event(const InputEvent *event) {
+#ifdef CONFIG_CROWPANEL_EPAPER_42
+static bool dm_handle_crowpanel_home_event(const InputEvent *event) {
     if (!event || event->type != INPUT_TYPE_HOME_BUTTON ||
         !event->data.home_pressed || s_lockscreen_overlay_active) {
         return false;
@@ -5167,7 +5106,7 @@ static bool dm_handle_home_button_event(const InputEvent *event) {
     return true;
 }
 #else
-static bool dm_handle_home_button_event(const InputEvent *event) {
+static bool dm_handle_crowpanel_home_event(const InputEvent *event) {
     (void)event;
     return false;
 }
@@ -5214,7 +5153,7 @@ void processEvent() {  // do not process events until the display manager is up
       processed++;
       continue;
     }
-    if (dm_handle_home_button_event(&event)) {
+    if (dm_handle_crowpanel_home_event(&event)) {
       processed++;
       continue;
     }
@@ -5304,7 +5243,7 @@ void processEvent() {  // do not process events until the display manager is up
       if (crash_reporter_handle_input(&event)) {
         return;
       }
-      if (dm_handle_home_button_event(&event)) {
+      if (dm_handle_crowpanel_home_event(&event)) {
         return;
       }
       if (xSemaphoreTake(dm.mutex, pdMS_TO_TICKS(MUTEX_TIMEOUT_MS)) == pdTRUE) {
