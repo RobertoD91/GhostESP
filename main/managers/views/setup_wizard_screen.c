@@ -202,12 +202,9 @@ static void skip_setup(void);
 
 /* Shrink rows until every entry fits inside the list box.
  *
- * A list whose content overflows its box becomes scrollable, and on a
- * scrollable container LVGL treats a press that drifts past its scroll
- * threshold as a scroll and drops the LV_EVENT_CLICKED on release -- so the
- * rows stop responding to taps even though touch itself works fine. On a
- * 320x240 panel the six region rows overflow by ~13px, which is enough to arm
- * that behaviour.
+ * On a 320x240 panel the six region rows overflow the list by ~13px, so the
+ * last one is clipped and can only be reached by scrolling first. Fitting them
+ * costs 4px of row height and makes every entry tappable straight away.
  *
  * Rows are only ever made smaller, so any screen where the list already fits
  * is unaffected. When the entries cannot fit even at WIZARD_ROW_H_MIN the
