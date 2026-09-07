@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](LICENSE)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.1-orange?style=flat-square)](https://docs.espressif.com/projects/esp-idf/)
 [![Discord](https://img.shields.io/discord/5cyNmUMgwh?style=flat-square&label=Discord&color=5865F2)](https://discord.gg/5cyNmUMgwh)
-[![Boards](https://img.shields.io/badge/board%20targets-61-2ea043?style=flat-square)](#supported-boards)
+[![Boards](https://img.shields.io/badge/board%20targets-62-2ea043?style=flat-square)](#supported-boards)
 
 **⭐️ Enjoying GhostESP? Please give the repo a star. It helps a lot.**
 
@@ -246,7 +246,7 @@ GhostESP is a platform, not a bag of tools. Five things set it apart:
 
 ## Supported Boards
 
-61 board targets build in CI ([`.github/workflows/compile_all.yml`](.github/workflows/compile_all.yml)) from 60 configs in [`configs/`](configs/). Awok V5 shares the generic ESP32-S2 config.
+62 board targets build in CI ([`.github/workflows/compile_all.yml`](.github/workflows/compile_all.yml)) from 61 configs in [`configs/`](configs/). Awok V5 shares the generic ESP32-S2 config.
 
 <details>
 <summary><strong>Board feature matrix (click to expand)</strong></summary>
@@ -314,10 +314,11 @@ GhostESP is a platform, not a bag of tools. Five things set it apart:
 | Pancake C5 | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | Full | ✓ | ✗ | ✓ |
 | M5Stack CoreS3-SE | ✓ | ✗ | ✓ | ✗ | ✗ | ✓ | ✗ | Full | ✓ | ✗ | ✓ |
 | M5Stack AtomS3R | ✓ | ✗ | ✓ | ✓ | ✗ | ✓ | ✗ | Full | has 1MB vfs partition | ✗ | ✗ |
+| M5Stack Core2 for AWS | ✓ | ✗ | ✓ | ✗ | ✗ | ✓ | ✗ | Full | ✓ | ✓ | ✗ |
 
 `*` — the checked-in config for this board predates a Kconfig option (`NFC_CHAMELEON`) that defaults on for BLE-capable boards; no board-specific override is present, so this reflects the Kconfig default rather than an explicit setting in the file. Most unstarred BLE-capable boards set the symbol explicitly, but some generic configs may also rely on the Kconfig default.
 
-**M5Stack Grove ports:** the M5Stack CoreS3-SE and AtomS3R configs expose their HY2.0-4P Grove connectors on I2C port 1 (`PORT.A`: SDA=G2, SCL=G1; the CoreS3-SE also has `PORT.B` G8/G9 and `PORT.C` G17/G18). Plug an ST25R3916 NFC module (I2C, 0x50) and/or an M5Stack ENV III unit (SHT30 0x44 + QMP6988 0x70) into Grove `PORT.A` and open the NFC or ENV III app — both devices share the same bus.
+**M5Stack Grove ports:** the M5Stack CoreS3-SE and AtomS3R configs expose their HY2.0-4P Grove connectors on I2C port 1 (`PORT.A`: SDA=G2, SCL=G1; the CoreS3-SE also has `PORT.B` G8/G9 and `PORT.C` G17/G18). The Core2 for AWS exposes `PORT.A` on I2C port 1 as SDA=G32/SCL=G33, and its `PORT.C` G13 is the default GPS UART RX. Plug an ST25R3916 NFC module (I2C, 0x50) and/or an M5Stack ENV III unit (SHT30 0x44 + QMP6988 0x70) into Grove `PORT.A` and open the NFC or ENV III app — both devices share the same bus.
 
 **Display:** `Full` = LVGL graphical UI. `Status` = secondary small status display only (shares the IO-expander I2C bus), no full UI. `—` = headless, no display.
 
@@ -325,7 +326,7 @@ GhostESP is a platform, not a bag of tools. Five things set it apart:
 
 **NFC (Chameleon):** Chameleon Ultra support rides over BLE, so it's on by default for any BLE-capable board and off where BLE is unavailable (ESP32-S2 boards) or explicitly disabled (Marauder v8, Pancake C5).
 
-**Native SD Apps:** at compile time the feature depends only on `CONFIG_SPIRAM` (`main/Kconfig.projbuild:1410`). At runtime the app gallery checks `MALLOC_CAP_SPIRAM` and renders into the full LVGL screen, so a display is required for the UI to be usable. That leaves it enabled on: AWOK Mini, Waveshare/Crowtech/Sunton 7″, CrowPanel Advance 2.4/2.8/3.5/4.3/5″, CrowPanel Advanced P4 5″/7/9/10.1″ (v1.1/v1.2+), JC3248W535EN, T-Deck, T-Embed CC1101, GhostLink P1 Core, T-Dongle-C5, NM-CYD-C5, M5Stack CoreS3-SE, Banshee (C5), and Marauder v8/Pancake C5. Boards with a screen but no PSRAM (Cardputer, Cardputer ADV, the CYD2 family, S3TWatch, T-Dongle-S3, M5Stack AtomS3R, etc.) don't get it.
+**Native SD Apps:** at compile time the feature depends only on `CONFIG_SPIRAM` (`main/Kconfig.projbuild:1410`). At runtime the app gallery checks `MALLOC_CAP_SPIRAM` and renders into the full LVGL screen, so a display is required for the UI to be usable. That leaves it enabled on: AWOK Mini, Waveshare/Crowtech/Sunton 7″, CrowPanel Advance 2.4/2.8/3.5/4.3/5″, CrowPanel Advanced P4 5″/7/9/10.1″ (v1.1/v1.2+), JC3248W535EN, T-Deck, T-Embed CC1101, GhostLink P1 Core, T-Dongle-C5, NM-CYD-C5, M5Stack CoreS3-SE, Banshee (C5), and Marauder v8/Pancake C5. Boards with a screen but no PSRAM (Cardputer, Cardputer ADV, the CYD2 family, S3TWatch, T-Dongle-S3, M5Stack AtomS3R, etc.) don't get it. The M5Stack Core2 for AWS does have 8MB of PSRAM, but its config leaves `CONFIG_SPIRAM` off for now — no classic-ESP32 profile in this repo enables PSRAM yet, so turning it on there is untested.
 
 **Banshee** ships as two configs: the S3 main board (headless) and the C5 module that drives its display and status LED, paired over GhostLink.
 

@@ -153,6 +153,19 @@ void gui_router_legacy_switch_immediate(View *view) {
         return;
     }
 
+    /* Legacy code also switches to the view it is already showing, meaning
+     * "rebuild me, I just changed my internal step/mode" -- the setup wizard
+     * advancing a step, the SD browser descending into a directory, the
+     * options screen swapping its menu. display_manager_switch_view() always
+     * builds a bare {GUI_ROUTE_VIEW, view} route, so such a request is equal
+     * to the route already on top of the stack and gui_router_navigate_immediate()
+     * would silently drop it, leaving the old screen up. Re-render instead. */
+    if (s_routes[s_depth - 1].view == view) {
+        s_previous_view = view;
+        render_current();
+        return;
+    }
+
     /* Legacy code often switches directly to an ancestor instead of saying
      * Back. Keep that compatibility isolated here while migrated code uses
      * explicit operations and never infers direction. */

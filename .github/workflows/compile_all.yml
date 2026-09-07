@@ -34,6 +34,11 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      # One broken board must not hide the other 61. With the default
+      # fail-fast, the first failure cancels every other job in the matrix,
+      # so a single pre-existing breakage reports as "everything is red" and
+      # no target ever gets a verdict.
+      fail-fast: false
       matrix:
         target:
           - { name: "esp32-generic",          idf_target: "esp32",   sdkconfig_file: "configs/sdkconfig.default.esp32",                   zip_name: "esp32-generic.zip" }
@@ -95,6 +100,7 @@ jobs:
           - { name: "XIAO_S3",                 idf_target: "esp32s3", sdkconfig_file: "configs/sdkconfig.xiao_esp32s3",                    zip_name: "XIAO_S3.zip", ota: true, ota_slot_size: 4001792, board_key: "xiao_esp32s3" }
           - { name: "M5Stack CoreS3-SE",        idf_target: "esp32s3", sdkconfig_file: "configs/sdkconfig.m5cores3se",                    zip_name: "M5Stack_CoreS3-SE.zip" }
           - { name: "M5Stack AtomS3R",          idf_target: "esp32s3", sdkconfig_file: "configs/sdkconfig.atoms3r",                      zip_name: "M5Stack_AtomS3R.zip" }
+          - { name: "M5Stack Core2 for AWS",    idf_target: "esp32",   sdkconfig_file: "configs/sdkconfig.m5core2_aws",                zip_name: "M5Stack_Core2_for_AWS.zip", ota: true, ota_slot_size: 6291456, board_key: "m5core2_aws" }
           - { name: "XIAO_C5",                 idf_target: "esp32c5", sdkconfig_file: "configs/sdkconfig.xiao_esp32c5",                    zip_name: "XIAO_C5.zip" }
           - { name: "Marauder V8",             idf_target: "esp32c5", sdkconfig_file: "configs/sdkconfig.MarauderV8",                      zip_name: "MarauderV8.zip" }
           - { name: "Marauder Pancake",        idf_target: "esp32c5", sdkconfig_file: "configs/sdkconfig.Pancake",                         zip_name: "MarauderPancake.zip" }

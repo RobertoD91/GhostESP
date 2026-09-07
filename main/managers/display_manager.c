@@ -117,6 +117,11 @@ static i2c_master_bus_handle_t s_touch_i2c_bus = NULL;
 #include "vendor/drivers/axp2101.h"
 #endif
 
+#ifdef CONFIG_HAS_AXP192
+#include "lvgl_i2c/i2c_manager.h"
+#include "vendor/drivers/axp192.h"
+#endif
+
 #ifdef CONFIG_HAS_FUEL_GAUGE
 #include "managers/fuel_gauge_manager.h"
 #endif
@@ -319,6 +324,20 @@ static volatile bool s_lvgl_gate_closed = false;
 static volatile bool s_lvgl_gate_parked = false;
 static volatile bool s_input_gate_closed = false;
 static volatile bool s_input_gate_parked = false;
+
+/* Sleep for at least one tick.
+ *
+ * The gate/quiesce loops below spin at task priority 14-15 while the IDLE task
+ * sits at priority 0. On a board configured with CONFIG_FREERTOS_HZ=100 (every
+ * ESP32-classic profile here) pdMS_TO_TICKS() of anything under 10ms truncates
+ * to 0, and vTaskDelay(0) is just taskYIELD(): it hands off only to tasks of
+ * equal or higher priority, so IDLE never runs. A gate that stays closed for
+ * more than CONFIG_ESP_TASK_WDT_TIMEOUT_S then trips the task watchdog on IDLE
+ * and reboots the board, turning a slow SD mount into a boot loop. Clamping to
+ * one tick keeps these loops actually blocking; on HZ=1000 boards the value is
+ * unchanged. */
+#define DM_DELAY_AT_LEAST_ONE_TICK(ms)                                         \
+  vTaskDelay(pdMS_TO_TICKS(ms) > 0 ? pdMS_TO_TICKS(ms) : 1)
 /* Serializes every cross-task entry into LVGL's internal timer list/heap
  * (lv_timer_handler() and lv_async_call()); see the creation site for why
  * this must be recursive. */
@@ -936,6 +955,24 @@ static bool get_battery_info(uint8_t *percentage, bool *is_charging) {
     if (g_cached_batt_valid) {
         *percentage = g_cached_batt_percent;
         *is_charging = g_cached_batt_charging;
+        result = true;
+    }
+#elif defined(CONFIG_HAS_AXP192)
+    /* Deliberately its own arm rather than a case under CONFIG_HAS_BATTERY.
+     * Despite the name, HAS_BATTERY does not mean "this board has a battery":
+     * its Kconfig help reads "Enable power saving features if you have a
+     * battery" and the arm below calls axp2101_get_power_level() directly, so
+     * in practice it means "this board has an AXP2101". A board with an
+     * AXP192 answers to a different chip on different registers, and setting
+     * HAS_BATTERY for it would also switch on the unrelated power-saving
+     * behaviour that symbol gates elsewhere.
+     *
+     * Being an #elif above HAS_BATTERY, this arm wins wherever both are set;
+     * no board does that today. The honest fix is renaming HAS_BATTERY to say
+     * what it means, which touches 36 board configs. */
+    // AXP192 has no fuel gauge, so this is a voltage-derived estimate.
+    if (axp192_get_power_level(percentage) == ESP_OK) {
+        *is_charging = axp192_is_charging();
         result = true;
     }
 #elif defined(CONFIG_HAS_BATTERY)
@@ -1815,6 +1852,23 @@ ESP_LOGI(TAG, "T-Deck trackball ISRs registered");
   if (crowpanel_7_i2c_ret != ESP_OK && crowpanel_7_i2c_ret != ESP_ERR_INVALID_STATE) {
     ESP_LOGE(TAG, "Failed to initialize CrowPanel Advance 7 touch I2C bus: %s",
              esp_err_to_name(crowpanel_7_i2c_ret));
+  }
+#endif
+#ifdef CONFIG_HAS_AXP192
+  /* Core2-class boards power the panel, its reset line, the backlight and the
+   * TF card slot from the AXP192, which shares the internal I2C bus with the
+   * touch controller. Bring the bus up early so the PMU sequence runs before
+   * lvgl_driver_init() probes an otherwise unpowered, still-in-reset panel. */
+  esp_err_t axp_i2c_ret = lvgl_i2c_init(CONFIG_LV_I2C_TOUCH_PORT);
+  if (axp_i2c_ret != ESP_OK && axp_i2c_ret != ESP_ERR_INVALID_STATE) {
+    ESP_LOGE(TAG, "Failed to initialize AXP192/touch I2C bus: %s",
+             esp_err_to_name(axp_i2c_ret));
+  } else {
+    esp_err_t axp_ret = axp192_init();
+    if (axp_ret != ESP_OK) {
+      ESP_LOGE(TAG, "AXP192 init failed: %s -- display will stay dark",
+               esp_err_to_name(axp_ret));
+    }
   }
 #endif
   ESP_LOGI(TAG, "display_manager: initializing LVGL...");
@@ -3464,7 +3518,7 @@ void display_manager_suspend_lvgl_task(void) {
       ESP_LOGW(TAG, "lvgl quiesce timed out; forcing suspend");
       break;
     }
-    vTaskDelay(pdMS_TO_TICKS(2));
+    DM_DELAY_AT_LEAST_ONE_TICK(2);
   }
   vTaskSuspend(lvgl_task_handle);
 }
@@ -3491,7 +3545,7 @@ void display_manager_suspend_input_task(void) {
       ESP_LOGW(TAG, "input quiesce timed out; forcing suspend");
       break;
     }
-    vTaskDelay(pdMS_TO_TICKS(2));
+    DM_DELAY_AT_LEAST_ONE_TICK(2);
   }
   vTaskSuspend(input_task_handle);
 }
@@ -3522,6 +3576,12 @@ static void display_manager_set_backlight_raw(uint8_t percentage) {
     ESP_LOGI(TAG, "TDisplay S3 backlight: %d%% (LEDC PWM)", percentage);
 #elif defined(CONFIG_IS_ATOMS3R)
     m5gfx_set_brightness(percentage);
+#elif defined(CONFIG_HAS_AXP192)
+    /* Core2 backlight is the AXP192 DCDC3 rail, not a PWM'd GPIO. */
+    esp_err_t axp_bl_err = axp192_set_backlight(percentage);
+    if (axp_bl_err != ESP_OK) {
+        ESP_LOGW(TAG, "AXP192 backlight update failed: %s", esp_err_to_name(axp_bl_err));
+    }
 #elif defined(CONFIG_CROWPANEL_ADVANCED_P4) && defined(CONFIG_CROWPANEL_P4_PANEL_RGB_800X480)
     esp_err_t err = crowpanel_p4_display_set_backlight(percentage);
     if (err != ESP_OK) {
@@ -3852,7 +3912,7 @@ void hardware_input_task(void *pvParameters) {
     if (s_input_gate_closed) {
       s_input_gate_parked = true;
       while (s_input_gate_closed) {
-        vTaskDelay(pdMS_TO_TICKS(5));
+        DM_DELAY_AT_LEAST_ONE_TICK(5);
       }
       s_input_gate_parked = false;
     }
@@ -5400,7 +5460,7 @@ void lvgl_tick_task(void *arg) {
       if (s_lvgl_gate_closed) {
           s_lvgl_gate_parked = true;
           while (s_lvgl_gate_closed) {
-              vTaskDelay(pdMS_TO_TICKS(5));
+              DM_DELAY_AT_LEAST_ONE_TICK(5);
           }
           s_lvgl_gate_parked = false;
       }

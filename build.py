@@ -411,7 +411,8 @@ def get_build_targets() -> List[Dict[str, str]]:
         {"name": "Cardputer ADV", "idf_target": "esp32s3", "sdkconfig_file": "configs/sdkconfig.cardputeradv", "zip_name": "CardputerADV.zip"},
         {"name": "Marauder V8", "idf_target": "esp32c5", "sdkconfig_file": "configs/sdkconfig.MarauderV8", "zip_name": "MarauderV8.zip"},
         {"name": "Marauder Pancake", "idf_target": "esp32c5", "sdkconfig_file": "configs/sdkconfig.Pancake", "zip_name": "MarauderPancake.zip"},
-        {"name": "Banshee C5", "idf_target": "esp32c5", "sdkconfig_file": "configs/sdkconfig.somethingsomething", "zip_name": "Banshee-C5.zip"}
+        {"name": "Banshee C5", "idf_target": "esp32c5", "sdkconfig_file": "configs/sdkconfig.somethingsomething", "zip_name": "Banshee-C5.zip"},
+        {"name": "M5Stack Core2 for AWS", "idf_target": "esp32", "sdkconfig_file": "configs/sdkconfig.m5core2_aws", "zip_name": "M5Stack_Core2_for_AWS.zip"}
     ]
 
 def validate_project_directory() -> bool:
@@ -582,6 +583,61 @@ def run_menuconfig(target: Dict[str, str], env: Dict[str, str], cmd_prefix: str 
     
     return True
 
+def patch_idf_gdbstub(idf_path: Optional[str], idf_target: str) -> bool:
+    """Patch ESP-IDF's esp_gdbstub so this project compiles against it.
+
+    Mirrors the "Patch ESP-IDF gdbstub compatibility" step in
+    .github/workflows/compile_all.yml -- keep the two in sync. Idempotent:
+    re-running on an already-patched tree is a no-op.
+    """
+    import re
+
+    if not idf_path or not os.path.isdir(idf_path):
+        print("WARNING: IDF_PATH not resolved; skipping gdbstub patch")
+        return True
+
+    gdbstub = os.path.join(idf_path, "components", "esp_gdbstub", "src", "gdbstub.c")
+    xtensa = os.path.join(idf_path, "components", "esp_gdbstub", "src", "port",
+                          "xtensa", "gdbstub_xtensa.c")
+    try:
+        if os.path.isfile(gdbstub):
+            with open(gdbstub, "r", encoding="utf-8") as fp:
+                source = fp.read()
+            helper_guard = re.compile(
+                r"#if\s*\(?\s*CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME\s*\|\|"
+                r"\s*CONFIG_ESP_GDBSTUB_SUPPORT_TASKS\s*\)?"
+            )
+            if helper_guard.search(source):
+                with open(gdbstub, "w", encoding="utf-8") as fp:
+                    fp.write(helper_guard.sub("#if 1", source))
+                print("Patched ESP-IDF gdbstub.c for compatibility")
+
+        if idf_target in ("esp32", "esp32s2", "esp32s3") and os.path.isfile(xtensa):
+            with open(xtensa, "r", encoding="utf-8") as fp:
+                source = fp.read()
+            source = source.replace("portNUM_PROCESSORS", "CONFIG_FREERTOS_NUMBER_OF_CORES")
+            source, tcb_count = re.subn(
+                r"const\s+StaticTask_t\s*\*\s*tcb\s*;", "void *tcb = NULL;", source)
+            source, lookup_count = re.subn(
+                r"tcb\s*=\s*esp_gdbstub_find_tcb_by_frame\s*\(frame\)\s*;", "", source)
+            source, _ = re.subn(
+                r"#if\s+(?:XCHAL_HAVE_FP|0)\s+(?=gdbstub_write_fpu_regs\s*\()",
+                "#if 0\n    ", source)
+            if tcb_count != lookup_count or tcb_count not in (0, 1):
+                print(f"ERROR: unexpected Xtensa FPU patch counts: "
+                      f"tcb={tcb_count}, lookup={lookup_count}")
+                return False
+            with open(xtensa, "w", encoding="utf-8") as fp:
+                fp.write(source)
+            if tcb_count:
+                print("Patched ESP-IDF gdbstub_xtensa.c for compatibility")
+    except OSError as e:
+        print(f"ERROR: Could not patch ESP-IDF gdbstub sources: {e}")
+        return False
+
+    return True
+
+
 def build_target(target: Dict[str, str], env: Dict[str, str], cmd_prefix: str = "") -> bool:
     """Build a specific target"""
     print(f"\n{'='*40}")
@@ -625,7 +681,15 @@ def build_target(target: Dict[str, str], env: Dict[str, str], cmd_prefix: str = 
         return False
     
     print("Config file copied successfully.")
-    
+
+    # A stock ESP-IDF checkout cannot compile esp_gdbstub against this project
+    # (command_name_matches / portNUM_PROCESSORS / StaticTask_t errors). CI
+    # patches ESP-IDF in place before every build; do the same here so a local
+    # build does not fail on something the CI build never sees.
+    if not patch_idf_gdbstub(env.get('IDF_PATH'), target['idf_target']):
+        print("ERROR: Failed to patch ESP-IDF for gdbstub compatibility")
+        return False
+
     # Set target
     print(f"Setting IDF target to {target['idf_target']}...")
     _remove_non_cmake_build_dir()

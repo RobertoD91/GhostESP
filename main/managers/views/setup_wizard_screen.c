@@ -194,6 +194,30 @@ static void skip_setup(void);
 #define USABLE_H (LV_VER_RES - STATUS_BAR_H)
 #define USABLE_W LV_HOR_RES
 
+/* Gap between rows in the wizard's option/region lists. Set explicitly so the
+ * fitting arithmetic below does not depend on the active theme's pad_row. */
+#define WIZARD_ROW_GAP 2
+/* Below this a row is too small to hit reliably, so keep scrolling instead. */
+#define WIZARD_ROW_H_MIN 20
+
+/* Shrink rows until every entry fits inside the list box.
+ *
+ * On a 320x240 panel the six region rows overflow the list by ~13px, so the
+ * last one is clipped and can only be reached by scrolling first. Fitting them
+ * costs 4px of row height and makes every entry tappable straight away.
+ *
+ * Rows are only ever made smaller, so any screen where the list already fits
+ * is unaffected. When the entries cannot fit even at WIZARD_ROW_H_MIN the
+ * original height is kept and the list stays scrollable, which is the right
+ * trade for a genuinely long list. */
+static int wizard_fit_row_h(int list_height, int list_pad, int count, int btn_h) {
+    if (count <= 0) return btn_h;
+    int inner = list_height - list_pad * 2 - WIZARD_ROW_GAP * (count - 1);
+    int fit = inner / count;
+    if (fit < WIZARD_ROW_H_MIN) return btn_h;
+    return btn_h > fit ? fit : btn_h;
+}
+
 static void style_wizard_btn(lv_obj_t *btn, lv_color_t bg, lv_coord_t radius) {
     lv_obj_set_style_bg_color(btn, bg, LV_PART_MAIN);
     lv_obj_set_style_radius(btn, radius, LV_PART_MAIN);
@@ -473,8 +497,11 @@ static void show_option_screen(const char *title_text, const char **options, int
     lv_obj_set_style_border_width(option_list, 0, 0);
     lv_obj_set_style_shadow_width(option_list, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(option_list, list_pad, 0);
+    lv_obj_set_style_pad_row(option_list, WIZARD_ROW_GAP, 0);
     lv_obj_set_flex_flow(option_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(option_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    btn_h = wizard_fit_row_h(list_height, list_pad, count, btn_h);
 
     int item_w = get_card_width(list_pad);
     
@@ -565,8 +592,11 @@ static void show_country_screen(void) {
     lv_obj_set_style_border_width(country_list, 0, 0);
     lv_obj_set_style_shadow_width(country_list, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(country_list, list_pad, 0);
+    lv_obj_set_style_pad_row(country_list, WIZARD_ROW_GAP, 0);
     lv_obj_set_flex_flow(country_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(country_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    btn_h = wizard_fit_row_h(list_height, list_pad, (int)COUNTRY_COUNT, btn_h);
 
     int item_w = get_card_width(list_pad);
     
