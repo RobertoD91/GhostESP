@@ -1398,6 +1398,16 @@ void esp_comm_manager_init(gpio_num_t tx_pin, gpio_num_t rx_pin, uint32_t baud_r
             resolved_tx = GPIO_NUM_11;
             resolved_rx = GPIO_NUM_12;
         }
+    } else if (strcmp(CONFIG_BUILD_CONFIG_TEMPLATE, "m5core2_aws") == 0) {
+        desired_uart = UART_NUM_1;
+        if ((int)tx_pin == (int)DEFAULT_TX_PIN && (int)rx_pin == (int)DEFAULT_RX_PIN) {
+            /* The defaults (17/16) are the ESP32-D0WD PSRAM CLK/CS pins, so this
+             * board cannot have both peer comms and its 8MB of PSRAM there.
+             * G19 and G27 are the two pins M5Stack's pinmap lists as plain GPIO
+             * on the M-Bus; Port C (13/14) is already the GPS UART. */
+            resolved_tx = GPIO_NUM_19;
+            resolved_rx = GPIO_NUM_27;
+        }
     } else if (strcmp(CONFIG_BUILD_CONFIG_TEMPLATE, "ghostlink_p1_core") == 0) {
         desired_uart = UART_NUM_1;
         if ((int)tx_pin == (int)DEFAULT_TX_PIN && (int)rx_pin == (int)DEFAULT_RX_PIN) {
