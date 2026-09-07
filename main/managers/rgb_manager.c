@@ -1960,8 +1960,15 @@ void rgb_manager_policesiren_effect(RGBManager_t *rgb_manager, int delay_ms) {
     // Optionally, you could set all LEDs to the same color here if desired for strips
   }
   bool is_red = true;
-  while (1) {
-    for (int pulse_step = 0; pulse_step <= 255; pulse_step += 5) {
+  /* Every other effect loops on rainbow_task_should_exit; this one used to be
+   * a bare while(1). It therefore never returned, police_task never reached
+   * its exit path, and the caller that had signalled the exit fell through to
+   * force-deleting the task -- typically inside rgb_manager_set_color, which
+   * holds rgb_mutex. That orphaned the mutex and the next set_color blocked
+   * forever on portMAX_DELAY, wedging whichever task issued it. */
+  while (!rainbow_task_should_exit) {
+    for (int pulse_step = 0; pulse_step <= 255 && !rainbow_task_should_exit;
+         pulse_step += 5) {
       while (rgb_effect_paused) {
         vTaskDelay(pdMS_TO_TICKS(10));
       }

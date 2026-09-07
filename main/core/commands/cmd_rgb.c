@@ -182,11 +182,12 @@ void handle_rgb_mode(int argc, char **argv) {
             status_display_show_status("Color Invalid");
             return;
         }
-        // Set each LED to the selected static color.
-        for (int i = 0; i < rgb_manager.num_leds; i++) {
-            rgb_manager_set_color(&rgb_manager, i, r, g, b, false);
-        }
-        led_strip_refresh(rgb_manager.strip);
+        /* Index -1 writes every pixel and refreshes once, which is what the
+         * effects and the "off" branch already do. Setting them one at a time
+         * refreshed the whole strip per LED -- eleven back-to-back transfers
+         * that an SK6812 chain does not reliably latch, so the first invocation
+         * of a colour appeared to do nothing and only a second one took. */
+        rgb_manager_set_color(&rgb_manager, -1, r, g, b, false);
         // Persist selection so it remains active after other effects/off are toggled
         settings_set_rgb_mode(&G_Settings, chosen_mode);
         settings_save(&G_Settings);
