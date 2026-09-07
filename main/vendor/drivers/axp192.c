@@ -109,12 +109,12 @@ esp_err_t axp192_init(void) {
    * bottom base -- including its 10 SK6812 LEDs on G25, which accept data and
    * report success while staying dark when the base has no power.
    *
-   * This is a hypothesis, not a checked fact: M5GFX's Core2 table only ORs in
-   * LDO2 (`0x12, 0x04, 0xFF`) and never touches EXTEN, but M5GFX is a display
-   * library and has no reason to power the base. Enabling the boost on a board
-   * built around one is harmless either way, so it is worth the experiment --
-   * if the LEDs stay dark with this set, the cause is elsewhere (the LED model
-   * is hardcoded to WS2812 while these are SK6812). */
+   * Confirmed on hardware: with this bit set the bar lights, without it every
+   * rgbmode command reports success into the dark. Note that M5GFX is no guide
+   * here -- its Core2 table only ORs in LDO2 (`0x12, 0x04, 0xFF`) and leaves
+   * EXTEN alone, because it is a display library with no interest in the base.
+   * The 0x12 = 0x4D write that does set EXTEN belongs to Light_M5StickC, a
+   * different product. */
   if (err == ESP_OK) {
     err = axp192_update_reg(AXP192_REG_DCDC_LDO_EN, AXP192_EN_LDO3,
                             AXP192_EN_LDO2 | AXP192_EN_EXTEN);

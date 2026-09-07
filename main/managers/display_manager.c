@@ -958,6 +958,18 @@ static bool get_battery_info(uint8_t *percentage, bool *is_charging) {
         result = true;
     }
 #elif defined(CONFIG_HAS_AXP192)
+    /* Deliberately its own arm rather than a case under CONFIG_HAS_BATTERY.
+     * Despite the name, HAS_BATTERY does not mean "this board has a battery":
+     * its Kconfig help reads "Enable power saving features if you have a
+     * battery" and the arm below calls axp2101_get_power_level() directly, so
+     * in practice it means "this board has an AXP2101". A board with an
+     * AXP192 answers to a different chip on different registers, and setting
+     * HAS_BATTERY for it would also switch on the unrelated power-saving
+     * behaviour that symbol gates elsewhere.
+     *
+     * Being an #elif above HAS_BATTERY, this arm wins wherever both are set;
+     * no board does that today. The honest fix is renaming HAS_BATTERY to say
+     * what it means, which touches 36 board configs. */
     // AXP192 has no fuel gauge, so this is a voltage-derived estimate.
     if (axp192_get_power_level(percentage) == ESP_OK) {
         *is_charging = axp192_is_charging();
